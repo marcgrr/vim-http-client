@@ -18,6 +18,7 @@ VAR_REGEX = re.compile('^# ?(:[^: ]+)\\s*=\\s*(.+)$')
 GLOBAL_VAR_REGEX = re.compile('^# ?(\$[^$ ]+)\\s*=\\s*(.+)$')
 FILE_REGEX = re.compile("!((?:file)|(?:(?:content)))\((.+)\)")
 JSON_REGEX = re.compile("(javascript|json)$", re.IGNORECASE)
+GLOBAL_HEADER_REGEX = re.compile('^# !([^()<>@,;:\<>/\[\]?={}]+):\\s*(.*)$')
 
 verify_ssl = vim.eval('g:http_client_verify_ssl') == '1'
 
@@ -35,6 +36,7 @@ def is_comment(s):
 def do_request(block, buf):
     variables = dict((m.groups() for m in (GLOBAL_VAR_REGEX.match(l) for l in buf) if m))
     variables.update(dict((m.groups() for m in (VAR_REGEX.match(l) for l in block) if m)))
+    global_headers = dict((m.groups() for m in (GLOBAL_HEADER_REGEX.match(l) for l in buf) if m))
 
     block = [line for line in block if not is_comment(line) and line.strip() != '']
 
@@ -52,6 +54,7 @@ def do_request(block, buf):
     url = replace_vars(url, variables)
 
     headers = {}
+    headers.update(global_headers)
     while len(block) > 0:
         header_match = HEADER_REGEX.match(block[0])
         if header_match:
@@ -98,7 +101,8 @@ def do_request(block, buf):
     display = (
         response_body.split('\n') +
         ['', '// status code: %s' % response.status_code] +
-        ['// %s: %s' % (k, v) for k, v in response.headers.items()]
+        ['// %s: %s' % (k, v) for k, v in response.headers.items()] +
+        ['// global headers: %s' % str(global_headers)]
     )
 
     return display, content_type
